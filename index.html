@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Snake Game</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+body {
+  background-color: #0f172a;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  margin: 0;
+  font-family: 'Press Start 2P', monospace;
+  color: #ffffff;
+  animation: fadeInBackground 2s ease forwards;
+}
+@keyframes fadeInBackground {
+  from {
+    background-color: #0f172a;
+  }
+  to {
+    background-color: #0f172a;
+  }
+}
+#game-board {
+  background-color: #6ee7b7;
+  border: 6px solid #14b8a6;
+  margin-bottom: 25px;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border-radius: 12px;
+}
+#game-board:hover {
+  transform: scale(1.06);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.6);
+}
+#message-box {
+  margin-top: 15px;
+  font-size: 1.6em;
+  color: #f5f5f5;
+  text-shadow: 3px 3px 12px rgba(0, 0, 0, 0.7);
+  animation: fadeIn 1s ease, pulse 2s infinite alternate;
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes pulse {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.08);
+  }
+}
+.button-container {
+  display: flex;
+  gap: 20px;
+  margin-top: 30px;
+}
+.game-button {
+  padding: 16px 32px;
+  font-size: 1.2em;
+  font-family: 'Press Start 2P', monospace;
+  background-color: #fef08a;
+  color: #1e293b;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+  transition: background-color 0.3s ease, transform 0.1s ease, box-shadow 0.3s ease;
+  outline: none;
+}
+.game-button:hover {
+  background-color: #fde047;
+  transform: scale(1.1);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+}
+.game-button:active {
+  background-color: #fcd34d;
+  transform: scale(0.9);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+.game-button:focus {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3), 0 0 0 3px rgba(254, 240, 138, 0.5);
+}
+#scoreboard {
+  position: absolute;
+  top: 25px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.8);
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: 1.4em;
+  color: #ffffff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
+  z-index: 10;
+  border: 3px solid #6366f1;
+  animation: fadeInScoreboard 1s ease forwards, slideInScoreboard 1s ease forwards;
+}
+@keyframes fadeInScoreboard {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes slideInScoreboard {
+  from {
+    transform: translateX(-50%) translateY(-50px);
+  }
+  to {
+    transform: translateX(-50%) translateY(0);
+  }
+}
+</style>
+</head>
+<body>
+  <div id="scoreboard">Score: <span id="score-display">0</span></div>
+  <canvas id="game-board" width="400" height="400"></canvas>
+  <div id="message-box"></div>
+  <div class="button-container">
+    <button id="start-button" class="game-button">Start</button>
+    <button id="pause-button" class="game-button">Pause</button>
+    <button id="sound-button" class="game-button">Sound On</button>
+  </div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+<script>
+const canvas = document.getElementById('game-board');
+const ctx = canvas.getContext('2d');
+const messageBox = document.getElementById('message-box');
+const startButton = document.getElementById('start-button');
+const pauseButton = document.getElementById('pause-button');
+const soundButton = document.getElementById('sound-button');
+const scoreDisplay = document.getElementById('score-display');
+const scoreboard = document.getElementById('scoreboard');
+const gridSize = 20;
+let snake = [{ x: 10, y: 10 }];
+let food = { x: 15, y: 15 };
+let direction = 'right';
+let gameSpeed = 150;
+let gameRunning = false;
+let gameInterval;
+let score = 0;
+let soundEnabled = true;
+let mutedText = "Sound On";
+const updateScoreDisplay = () => {
+  scoreDisplay.textContent = score;
+};
+const synth = new Tone.Synth().toDestination();
+function playEatSound() {
+  if (soundEnabled) {
+    synth.triggerAttackRelease("C6", "8n");
+  }
+}
+function playGameOverSound() {
+  if (soundEnabled) {
+    const polySynth = new Tone.PolySynth().toDestination();
+    polySynth.triggerAttackRelease(["C2", "E2", "G2", "Bb2"], "2n");
+  }
+}
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let i = 0; i < snake.length; i++) {
+    ctx.fillStyle = i === 0 ? '#a7f3d0' : '#34d399';
+    ctx.fillRect(
+      snake[i].x * gridSize,
+      snake[i].y * gridSize,
+      gridSize,
+      gridSize
+    );
+    ctx.strokeStyle = '#064e3b';
+    ctx.strokeRect(
+      snake[i].x * gridSize,
+      snake[i].y * gridSize,
+      gridSize,
+      gridSize
+    );
+  }
+  ctx.fillStyle = '#fca5a5';
+  ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize, gridSize);
+  ctx.strokeStyle = '#991b1b';
+  ctx.strokeRect(food.x * gridSize, food.y * gridSize, gridSize, gridSize);
+}
+function update() {
+  if (!gameRunning) return;
+  const head = { x: snake[0].x, y: snake[0].y };
+  switch (direction) {
+    case 'up':
+      head.y--;
+      break;
+    case 'down':
+      head.y++;
+      break;
+    case 'left':
+      head.x--;
+      break;
+    case 'right':
+      head.x++;
+      break;
+  }
+  if (
+    head.x < 0 ||
+    head.x >= canvas.width / gridSize ||
+    head.y < 0 ||
+    head.y >= canvas.height / gridSize ||
+    checkCollision(head)
+  ) {
+    gameOver();
+    return;
+  }
+  snake.unshift(head);
+  if (head.x === food.x && head.y === food.y) {
+    playEatSound();
+    score += 10;
+    updateScoreDisplay();
+    food = {
+      x: Math.floor(Math.random() * (canvas.width / gridSize)),
+      y: Math.floor(Math.random() * (canvas.height / gridSize)),
+    };
+  } else {
+    snake.pop();
+  }
+  draw();
+}
+function checkCollision(head) {
+  for (let i = 1; i < snake.length; i++) {
+    if (head.x === snake[i].x && head.y === snake[i].y) {
+      return true;
+    }
+  }
+  return false;
+}
+function startGame() {
+  if (gameRunning) return;
+  gameRunning = true;
+  messageBox.textContent = 'Game Started!';
+  gameInterval = setInterval(update, gameSpeed);
+  score = 0;
+  updateScoreDisplay();
+  snake = [{ x: 10, y: 10 }];
+  direction = 'right';
+}
+function pauseGame() {
+  gameRunning = false;
+  messageBox.textContent = 'Game Paused!';
+  clearInterval(gameInterval);
+}
+function gameOver() {
+  playGameOverSound();
+  gameRunning = false;
+  messageBox.textContent = 'Game Over! Press Start to play again.';
+  clearInterval(gameInterval);
+}
+document.addEventListener('keydown', (event) => {
+  if (!gameRunning) return;
+  switch (event.key) {
+    case 'ArrowUp':
+      if (direction !== 'down') direction = 'up';
+      break;
+    case 'ArrowDown':
+      if (direction !== 'up') direction = 'down';
+      break;
+    case 'ArrowLeft':
+      if (direction !== 'right') direction = 'left';
+      break;
+    case 'ArrowRight':
+      if (direction !== 'left') direction = 'right';
+      break;
+  }
+});
+startButton.addEventListener('click', startGame);
+pauseButton.addEventListener('click', pauseGame);
+soundButton.addEventListener('click', () => {
+  soundEnabled = !soundEnabled;
+  soundButton.textContent = soundEnabled ? "Sound On" : "Sound Off";
+  mutedText = soundEnabled ? "Sound On" : "Sound Off";
+});
+updateScoreDisplay();
+draw();
+</script>
+</body>
+</html>
